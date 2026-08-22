@@ -116,6 +116,10 @@ graph =graph_builder.compile(checkpointer)
 
 config= {'configurable':{'thread_id': uuid.uuid4()}}
 
+png_bytes = graph.get_graph().draw_mermaid_png()
+with open("graph.png", "wb") as f:
+    f.write(png_bytes)
+
 while True:
     user_message = input('Enter message:')
     result=graph.invoke({'messages':[{'role':'user', 'content': user_message}]}, config=config)
