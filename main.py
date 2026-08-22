@@ -1,7 +1,9 @@
+import uuid
 from dotenv import load_dotenv
 
 from langchain.chat_models import init_chat_model # importing this for the LLM model
 from langgraph.graph import MessagesState, StateGraph, START, END
+from langgraph.checkpoint.memory import InMemorySaver #for adding memory to the model
 
 load_dotenv()
 
@@ -15,6 +17,10 @@ graph_builder.add_node(prompt_llm)
 graph_builder.add_edge(START, 'prompt_llm') #connecting the nodes we have
 graph_builder.add_edge('prompt_llm', END)
 
-graph = graph_builder.compile() #this gives us the graph istance 
-user_message = input('Enter message:')
-print(graph.invoke({'messages': [{'role' : 'user', 'content': user_message}]}))
+checkpointer=InMemorySaver()
+
+graph = graph_builder.compile(checkpointer=checkpointer)#this gives us the graph istance
+config = {'configurable': {'thread_id': uuid.uuid4()}} 
+while True:
+    user_message = input('Enter message:')
+    print(graph.invoke({'messages': [{'role' : 'user', 'content': user_message}]}, config=config))
