@@ -1,0 +1,1 @@
+Followed through the tutorial LangGraph Crash Course - Agent Workflows in Python to create my first agent and get familiarity with LangGraph for future agent creations and AI work. 
