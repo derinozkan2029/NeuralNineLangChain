@@ -3,6 +3,9 @@ from typing import TypedDict, Annotated, Literal
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
+from langchain_core.vectorstores import InMemoryVectorStore
+from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings  #this is for intelligent embeddings
 from langchain.chat_models import init_chat_model # importing this for the LLM model
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -11,6 +14,9 @@ from langgraph.checkpoint.memory import InMemorySaver #for adding memory to the 
 load_dotenv()
 
 llm =init_chat_model('openai: gpt-4.1-mini')
+
+vector_store= InMemoryVectorStore(OpenAIEmbeddings(model= 'text-embedding-3-small'))
+vector_store.add_documents([Document(page_content=text) for text in KNOWLEDGE])
 
 class IntentClassifier(BaseModel):
     message_intent: Literal['chat','knowledge', 'code'] =Field(..., description= 'Classify whether the user' \
@@ -37,6 +43,10 @@ def prompt_llm_chat(state:State):
     # this one is just for chatting
 
 def prompt_llm_rag(state:State):
+    query = state['messages'][-1].content
+    documents = vector_store.similarity_search(query,k=3)
+    context= '\n'.join(f'- {doc.page_content}' for doc in documents)
+
     messages = {'role': 'system','content': 'No matter what the user says say that "I am a RAG agent."'} + state['messages']
     response = llm.invoke(messages)
     return {'messages': [{'role': 'assistant', 'content': response.content}]} #bc we are appending we pass this as a list
