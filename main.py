@@ -16,7 +16,16 @@ from langgraph.types import interrupt,Command
 
 load_dotenv()
 
-llm =init_chat_model('openai: gpt-4.1-mini')
+llm =init_chat_model('openai:gpt-4.1-mini')
+
+
+KNOWLEDGE = [
+    "NeuralNine is a YouTube channel focused on programming, AI, and software engineering tutorials.",
+    "LangGraph is a library for building stateful, multi-agent applications on top of LangChain.",
+    "A StateGraph in LangGraph defines nodes and edges that operate on a shared typed state.",
+    "Checkpointers like InMemorySaver let LangGraph persist conversation state across invocations using a thread_id.",
+    "RAG (Retrieval-Augmented Generation) combines a retriever over a knowledge base with an LLM to ground answers in source documents.",
+]
 
 vector_store= InMemoryVectorStore(OpenAIEmbeddings(model= 'text-embedding-3-small'))
 vector_store.add_documents([Document(page_content=text) for text in KNOWLEDGE])
@@ -28,7 +37,7 @@ class IntentClassifier(BaseModel):
 class State(TypedDict): #our own custom state inheriting from TypedDict
     messages: Annotated[list, add_messages]
     message_intent:str | None #this also needs to be passed down from node to node
-    next_node  = Str | None
+    next_node  = str | None
 
 def classify_intent(state:State): #takes a state and does an LLMP prompt with a structured output
     structured_llm = llm.with_structured_output(IntentClassifier)
@@ -37,7 +46,7 @@ def classify_intent(state:State): #takes a state and does an LLMP prompt with a 
     '("knowledge) or change code ("code)'}, 
     {'role': 'user', 'content': state['messages'][-1].content}]) #getting the state and the last message 
     #this creates an instance of an intent classifier 
-    return {'message_intent ': result.message_intent}
+    return {'message_intent': result.message_intent}
 
 def accept_coding(state:State):
     user_prompt= state['messages'][-1].content
@@ -45,14 +54,25 @@ def accept_coding(state:State):
     text = str(decision).strip().lower()
 
     if text in ['y', 'yes', 'approve', 'ok']:
-        return {}
+        return {'next_node': 'coding_agent'}
 
     if text in ['n', 'no', 'deny', 'cancel']:
         return {'messages': [{'role': 'assistant', 'content':'Coding request was denied by the user'}],'next_node':'denied'}
 
-    return {'messages': [{'role': 'assistant', 'content': text}]} #this is for human in the loop, 
+    return {'messages': [{'role': 'assistant', 'content': text}], 'next_node': 'accept_coding'} #this is for human in the loop
+
+
+def prepare_coding_request(state: State):
+    messages = [
+        {'role': 'system', 'content': 'Rewrite the latest user coding request into a clear instruction for Claude Code. Use the conversation history as context. Only output the instruction, no explanation.'},
+    ] + state['messages']
+
+    response = llm.invoke(messages)
+
+    return {'messages': [{'role': 'user', 'content': response.content}]}
+
 def prompt_llm_chat(state:State):
-    messages = {'role': 'system','content': 'You are a talkative chatbot for fun. Be nice.'} + state['messages']
+    messages = [{'role': 'system', 'content': 'You are a talkative chatbot for fun. Be nice.'}] + state['messages']
     response = llm.invoke(messages)
     return {'messages': [{'role': 'assistant', 'content': response.content}]} #bc we are appending we pass this as a list
     # this one is just for chatting
@@ -62,7 +82,7 @@ def prompt_llm_rag(state:State):
     documents = vector_store.similarity_search(query,k=3)
     context= '\n'.join(f'- {doc.page_content}' for doc in documents)
 
-    messages = {'role': 'system','content': 'No matter what the user says say that "I am a RAG agent."'} + state['messages']
+    messages = [{'role': 'system', 'content': 'You are a an RAG agent.'}] + state['messages']
     response = llm.invoke(messages)
     return {'messages': [{'role': 'assistant', 'content': response.content}]} #bc we are appending we pass this as a list
 
@@ -79,12 +99,14 @@ graph_builder.add_node('classifier', classify_intent)
 graph_builder.add_node('chat_agent', prompt_llm_chat)
 graph_builder.add_node('rag_agent', prompt_llm_rag)
 graph_builder.add_node('coding_agent', prompt_llm_code)
+graph_builder.add_node('prepare_coding_request', prepare_coding_request)
 graph_builder.add_node('accept_coding', accept_coding)
 
 
 graph_builder.add_edge(START, 'classifier')
-graph_builder.add_conditional_edge('accept_coding', lambda state: 'end' if state.get('next_node')=='denied' else 'coding_agent')
-graph_builder.add_conditional_edge('classifier', lambda state: state['message_intent'], {'chat':'chat_agent','knowledge':'rag_agent', 'code':'accept_coding'})
+graph_builder.add_edge('prepare_coding_request', 'accept_coding')
+graph_builder.add_conditional_edges('accept_coding', lambda state: 'end' if state.get('next_node')=='denied' else state['next_node'], {'end':END, 'coding_agent': 'coding_agent', 'accept_coding': 'prepare_coding_request'})
+graph_builder.add_conditional_edges('classifier', lambda state: state['message_intent'], {'chat':'chat_agent','knowledge':'rag_agent', 'code':'prepare_coding_request'})
 graph_builder.add_edge('chat_agent', END)
 graph_builder.add_edge('rag_agent', END)
 graph_builder.add_edge('coding_agent', END)
