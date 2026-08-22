@@ -12,6 +12,7 @@ from langchain.chat_models import init_chat_model # importing this for the LLM m
 from langgraph.graph import MessagesState, StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver #for adding memory to the model
+from langgraph.types import interrupt,Command 
 
 load_dotenv()
 
@@ -27,6 +28,7 @@ class IntentClassifier(BaseModel):
 class State(TypedDict): #our own custom state inheriting from TypedDict
     messages: Annotated[list, add_messages]
     message_intent:str | None #this also needs to be passed down from node to node
+    next_node  = Str | None
 
 def classify_intent(state:State): #takes a state and does an LLMP prompt with a structured output
     structured_llm = llm.with_structured_output(IntentClassifier)
@@ -37,7 +39,18 @@ def classify_intent(state:State): #takes a state and does an LLMP prompt with a 
     #this creates an instance of an intent classifier 
     return {'message_intent ': result.message_intent}
 
+def accept_coding(state:State):
+    user_prompt= state['messages'][-1].content
+    decision= interrupt(f'About to run Claude Code with request:\n\n{user_prompt}\n\n Approve?(yes/no, or type a revised request)')
+    text = str(decision).strip().lower()
 
+    if text in ['y', 'yes', 'approve', 'ok']:
+        return {}
+
+    if text in ['n', 'no', 'deny', 'cancel']:
+        return {'messages': [{'role': 'assistant', 'content':'Coding request was denied by the user'}],'next_node':'denied'}
+
+    return {'messages': [{'role': 'assistant', 'content': text}]} #this is for human in the loop, 
 def prompt_llm_chat(state:State):
     messages = {'role': 'system','content': 'You are a talkative chatbot for fun. Be nice.'} + state['messages']
     response = llm.invoke(messages)
@@ -66,10 +79,12 @@ graph_builder.add_node('classifier', classify_intent)
 graph_builder.add_node('chat_agent', prompt_llm_chat)
 graph_builder.add_node('rag_agent', prompt_llm_rag)
 graph_builder.add_node('coding_agent', prompt_llm_code)
+graph_builder.add_node('accept_coding', accept_coding)
 
 
 graph_builder.add_edge(START, 'classifier')
-graph_builder.add_conditional_edge('classifier', lambda state: state['message_intent'], {'chat':'chat_agent','knowledge':'rag_agent', 'code':'coding_agent'})
+graph_builder.add_conditional_edge('accept_coding', lambda state: 'end' if state.get('next_node')=='denied' else 'coding_agent')
+graph_builder.add_conditional_edge('classifier', lambda state: state['message_intent'], {'chat':'chat_agent','knowledge':'rag_agent', 'code':'accept_coding'})
 graph_builder.add_edge('chat_agent', END)
 graph_builder.add_edge('rag_agent', END)
 graph_builder.add_edge('coding_agent', END)
@@ -82,4 +97,10 @@ config= {'configurable':{'thread_id': uuid.uuid4()}}
 while True:
     user_message = input('Enter message:')
     result=graph.invoke({'messages':[{'role':'user', 'content': user_message}]}, config=config)
+
+    while '__interrupt__' in result:
+        prompt= result['__interrupt__'][0].value
+        decision = input(f'{prompt}>')
+        result = graph.invoke(Command(resume= decision), config=config)
+
     print(result['messages'][-1].content)
