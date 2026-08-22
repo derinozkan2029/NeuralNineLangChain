@@ -1,4 +1,6 @@
 import uuid
+import os
+import subprocess
 from typing import TypedDict, Annotated, Literal 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -52,9 +54,12 @@ def prompt_llm_rag(state:State):
     return {'messages': [{'role': 'assistant', 'content': response.content}]} #bc we are appending we pass this as a list
 
 def prompt_llm_code(state:State):
-    messages = {'role': 'system','content': 'No matter what the user says say that "I am a CODING agent."'} + state['messages']
-    response = llm.invoke(messages)
-    return {'messages': [{'role': 'assistant', 'content': response.content}]} #bc we are appending we pass this as a list
+    user_prompt = state['messages'][-1].content
+    workspace= os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+    result = subprocess.run(['claude', '-p', user_prompt, '--permission-mode', 'acceptEdits'], cwd=workspace, capture_output=True, text=True)
+    output= result.stdout.strip() or result.stderr.strip()
+    
+    return {'messages': [{'role': 'assistant', 'content':output}]} #bc we are appending we pass this as a list
 
 graph_builder = StateGraph(State)
 graph_builder.add_node('classifier', classify_intent)
