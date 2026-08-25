@@ -1,9 +1,13 @@
 import uuid
 import os
 import subprocess
+import requests
+import re
 from typing import TypedDict, Annotated, Literal 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+from bs4 import BeautifulSoup
+
 
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_core.documents import Document
@@ -26,3 +30,18 @@ class ResumeState(TypedDict):
     master_resume: str        # the background, loaded once, the second node after starting
     tailored_resume: str      # LLM-generated markdown/text before PDF render
     output_path: str | None
+
+def load_master_resume(path: str):
+    text = open(path, encoding='utf-8').read()
+    cleaned = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    if len(cleaned)>0:
+        return cleaned
+
+    
+
+
+
+
+
+
+graph_builder = StateGraph(ResumeState)
