@@ -31,6 +31,14 @@ class ResumeState(TypedDict):
     tailored_resume: str      # LLM-generated markdown/text before PDF render
     output_path: str | None
 
+
+class FitReasoning(BaseModel):
+    is_suitable: bool = Field(..., description= 'Classify whether the master_resume is suitable with the job content'
+    'by checking the keyword matches in the job description and the resume and checking graduation dates on both the job description and the resume'
+    '.')
+    reasoning: str = Field(..., description="2-3 sentences on why, citing specific gaps or matches, also classify the gaps as major or minor")
+
+
 def load_master_resume(path: str):
     text = open(path, encoding='utf-8').read()
     cleaned = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
