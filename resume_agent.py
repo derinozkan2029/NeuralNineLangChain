@@ -55,8 +55,8 @@ def load_master_resume(path: str):
 
 def fetch_job_posting(state:ResumeState):
     posting = requests.get(state['job_url'], headers={'User-Agent': '...'})
-    posting.raise_for_status()
-    soup=BeautifulSoup(posting.text, 'html.parser')
+    posting.raise_for_status() # check the HTML 200
+    soup=BeautifulSoup(posting.text, 'html.parser') 
     description_div = soup.find('div', class_='show-more-less-html__markup')
     return {'job_description': description_div.get_text(strip=True) if description_div else ''} #returning a dictionary
 
@@ -70,12 +70,61 @@ def curate_tailored_resume(state: ResumeState):
             'use that phrasing). Follow the same markdown section headers as the master resume, in the '
             'same order, mirrored exactly. Keep total content to what fits one page.')},
         {'role': 'user', 'content': (  f"MASTER RESUME:\n{state['master_resume']}\n\n" f"JOB DESCRIPTION:\n{state['job_description']}"
-        )},
-    ]
+        )}, ]
     response = llm.invoke(messages)
     return {'tailored_resume': response.content}
 
+def render_pdf(state: ResumeState):
+    css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'templates', 'resume.css') 
+    css = open(css_path, encoding='utf-8').read()
+    # this builds the path to the CSS file copied earlier, open it, read its raw text into a string. 
 
-    
+    full_html = f"""<html>
+<head>
+<meta charset="utf-8">
+<style>
+{css}
+</style>
+</head>
+<body>
+{state['tailored_resume']}
+</body>
+</html>"""
+
+    # an f-string building one complete HTML document as text here.
+
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'tmp', 'tailored.html')
+    # where we are going to save that HTML string as an actual file, so Chrome can open it.
+    os.makedirs(os.path.dirname(html_path), exist_ok=True)
+    #creates the workspace/tmp/ folder if it doesn't exist yet
+    with open(html_path, 'w', encoding='utf-8') as f: #writes the HTML string to disk at html_path
+        f.write(full_html)
+
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'output', 'tailored_resume.pdf')
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    subprocess.run([
+        chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+        f"--print-to-pdf={output_path}",
+        f"file://{html_path}"
+    ], check=True)
+
+    #launches Chrome as a separate program  in headless mode , tells it to load the HTML file we just wrote (file://{html_path}) and print it straight to a PDF at output_path, then exits.
+
+    return {'output_path': output_path}
+
+
 
 graph_builder = StateGraph(ResumeState)
+graph_builder.add_node('assess_fit', assess_fit)
+graph_builder.add_node('fetch_job_posting', fetch_job_posting)
+graph_builder.add_node('tailor_resume', curate_tailored_resume)
+graph_builder.add_node('render_pdf', render_pdf)
+
+graph_builder.add_edge(START, 'fetch_job_posting')
+graph_builder.add_edge('fetch_job_posting', 'assess_fit')
+graph_builder.add_conditional_edges('assess_fit', lambda state: 'suitable' if state['is_suitable'] else 'not_suitable', {'suitable': 'tailor_resume', 'not_suitable': 'report not_suitable'})
+graph_builder.add_edge('report_not_suitable', END)
+graph_builder.add_edge('tailor_resume', 'render_pdf')
+graph_builder.add_edge('render_pdf', END)
