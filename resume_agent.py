@@ -122,9 +122,28 @@ graph_builder.add_node('fetch_job_posting', fetch_job_posting)
 graph_builder.add_node('tailor_resume', curate_tailored_resume)
 graph_builder.add_node('render_pdf', render_pdf)
 
+
 graph_builder.add_edge(START, 'fetch_job_posting')
 graph_builder.add_edge('fetch_job_posting', 'assess_fit')
 graph_builder.add_conditional_edges('assess_fit', lambda state: 'suitable' if state['is_suitable'] else 'not_suitable', {'suitable': 'tailor_resume', 'not_suitable': 'report not_suitable'})
+# if not suitable we don't need to run it or tailor the resume
 graph_builder.add_edge('report_not_suitable', END)
 graph_builder.add_edge('tailor_resume', 'render_pdf')
 graph_builder.add_edge('render_pdf', END)
+
+graph = graph_builder.compile()
+
+resume_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'resume_master.md')
+master_resume = load_master_resume(resume_path)
+
+job_url = input('Enter job posting URL: ')
+
+initial_state = {
+    'job_url': job_url, 'job_description': '', 'is_suitable': None, 'fit_reasoning': None,
+    'master_resume': master_resume, 'tailored_resume': '', 'output_path': None,
+}
+result = graph.invoke(initial_state) #no thread_id this time bc I didn't have a checkpointer
+if result.get('output_path'):
+    print(f"Resume written to {result['output_path']}")
+else:
+    print(f"Not a good fit: {result['fit_reasoning']}")
