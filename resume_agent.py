@@ -42,7 +42,7 @@ def assess_fit(state:ResumeState): #takes a state and does an LLMP prompt with a
     structured_llm = llm.with_structured_output(FitReasoning)
 
     result = structured_llm.invoke([{'role':'system', 'content': 'Determine/classify whether the job description is suitable with the master resume.'}, 
-    {'role': 'user', 'content': state['master_resume'] state['job_description']}]) #getting the job description and the master resume
+    {'role': 'user', 'content': f"MASTER RESUME:\n{state['master_resume']}\n\nJOB DESCRIPTION:\n{state['job_description']}"}]) #getting the job description and the master resume
     #this creates an instance of a fit reasoning 
     return {'is_suitable': result.is_suitable, 'fit_reasoning': result.fit_reasoning}
 
@@ -60,7 +60,20 @@ def fetch_job_posting(state:ResumeState):
     description_div = soup.find('div', class_='show-more-less-html__markup')
     return {'job_description': description_div.get_text(strip=True) if description_div else ''} #returning a dictionary
 
-def curate_tailored_resume(state:ResumeState):
+def curate_tailored_resume(state: ResumeState):
+    messages = [ {'role': 'system', 'content': (
+            'Only use experience, skills, and accomplishments present in the master resume; '
+            'do not invent qualifications, metrics, or experience not in the source material. '
+            'Reorder bullets, reweight which experiences are emphasized, and adjust the professional '
+            'summary to fit the job. Mirror the job posting\'s terminology where honestly applicable '
+            '(e.g. if the posting says "distributed systems" and the resume has genuinely relevant work, '
+            'use that phrasing). Follow the same markdown section headers as the master resume, in the '
+            'same order, mirrored exactly. Keep total content to what fits one page.')},
+        {'role': 'user', 'content': (  f"MASTER RESUME:\n{state['master_resume']}\n\n" f"JOB DESCRIPTION:\n{state['job_description']}"
+        )},
+    ]
+    response = llm.invoke(messages)
+    return {'tailored_resume': response.content}
 
 
     
