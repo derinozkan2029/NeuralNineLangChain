@@ -36,7 +36,7 @@ class FitReasoning(BaseModel):
     is_suitable: bool =Field(..., description= 'Classify whether the master_resume is suitable with the job content'
     'by comparing the required qualifications and actual experience () and checking graduation dates on both the job description and the resume'
     '.')
-    reasoning: str = Field(..., description="2-3 sentences on why, citing specific gaps or matches, also classify the gaps as major or minor")
+    fit_reasoning: str = Field(..., description="2-3 sentences on why, citing specific gaps or matches, also classify the gaps as major or minor")
 
 def assess_fit(state:ResumeState): #takes a state and does an LLMP prompt with a structured output
     structured_llm = llm.with_structured_output(FitReasoning)
@@ -73,6 +73,9 @@ def curate_tailored_resume(state: ResumeState):
         )}, ]
     response = llm.invoke(messages)
     return {'tailored_resume': response.content}
+
+def report_not_suitable(state: ResumeState):
+    return {'output_path': None}
 
 def render_pdf(state: ResumeState):
     css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'templates', 'resume.css') 
@@ -125,7 +128,7 @@ graph_builder.add_node('render_pdf', render_pdf)
 
 graph_builder.add_edge(START, 'fetch_job_posting')
 graph_builder.add_edge('fetch_job_posting', 'assess_fit')
-graph_builder.add_conditional_edges('assess_fit', lambda state: 'suitable' if state['is_suitable'] else 'not_suitable', {'suitable': 'tailor_resume', 'not_suitable': 'report not_suitable'})
+graph_builder.add_conditional_edges('assess_fit', lambda state: 'suitable' if state['is_suitable'] else 'not_suitable', {'suitable': 'tailor_resume', 'not_suitable': 'report_not_suitable'})
 # if not suitable we don't need to run it or tailor the resume
 graph_builder.add_edge('report_not_suitable', END)
 graph_builder.add_edge('tailor_resume', 'render_pdf')
