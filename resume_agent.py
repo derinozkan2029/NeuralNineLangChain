@@ -158,7 +158,9 @@ graph_builder.add_edge('render_pdf', END)
 
 graph = graph_builder.compile()
 
-resume_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'resume_master.md')
+resume_path = input('Enter path to your resume file (.md or .txt) [default: workspace/resume_master.md]: ').strip()
+if not resume_path:
+    resume_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'resume_master.md')
 master_resume = load_master_resume(resume_path)
 
 job_url = input('Enter job posting URL: ')
