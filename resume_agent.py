@@ -3,6 +3,7 @@ import os
 import subprocess
 import requests
 import re
+import markdown
 from typing import TypedDict, Annotated, Literal 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -80,7 +81,27 @@ def report_not_suitable(state: ResumeState):
 def render_pdf(state: ResumeState):
     css_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'templates', 'resume.css') 
     css = open(css_path, encoding='utf-8').read()
-    # this builds the path to the CSS file copied earlier, open it, read its raw text into a string. 
+    # this builds the path to the CSS file copied earlier, open it, read its raw text into a string.
+
+    # python-markdown only starts a list at a blank line; the master resume (and the LLM output
+    # mirroring its structure) puts bullets directly under a link/description line with no blank
+    # line between them, so without this they'd get swallowed into the preceding paragraph. Only
+    # insert the blank line before the first bullet of a run, not between bullets, so the list
+    # stays "tight" (one <li> per line) instead of "loose" (each wrapped in its own <p>).
+    lines = state['tailored_resume'].split('\n')
+    normalized_lines = []
+    for i, line in enumerate(lines):
+        is_bullet = line.lstrip().startswith(('- ', '* '))
+        prev_line = lines[i - 1] if i > 0 else ''
+        prev_is_bullet_or_blank = prev_line.strip() == '' or prev_line.lstrip().startswith(('- ', '* '))
+        if is_bullet and not prev_is_bullet_or_blank:
+            normalized_lines.append('')
+        normalized_lines.append(line)
+    markdown_source = '\n'.join(normalized_lines)
+
+    resume_html = markdown.markdown(markdown_source, extensions=['extra', 'sane_lists'])
+    # converts the LLM's markdown (headers, bold, links, bullet lists) into real HTML tags
+    # so the CSS below actually applies, instead of literal '#'/'**' characters showing up in the PDF.
 
     full_html = f"""<html>
 <head>
@@ -90,7 +111,7 @@ def render_pdf(state: ResumeState):
 </style>
 </head>
 <body>
-{state['tailored_resume']}
+{resume_html}
 </body>
 </html>"""
 
@@ -124,6 +145,7 @@ graph_builder.add_node('assess_fit', assess_fit)
 graph_builder.add_node('fetch_job_posting', fetch_job_posting)
 graph_builder.add_node('tailor_resume', curate_tailored_resume)
 graph_builder.add_node('render_pdf', render_pdf)
+graph_builder.add_node('report_not_suitable', report_not_suitable)
 
 
 graph_builder.add_edge(START, 'fetch_job_posting')
