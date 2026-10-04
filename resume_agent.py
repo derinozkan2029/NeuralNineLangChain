@@ -4,7 +4,10 @@ import subprocess
 import requests
 import re
 import markdown
-from typing import TypedDict, Annotated, Literal 
+import json
+from datetime import date
+from html import escape
+from typing import TypedDict, Annotated, Literal
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from bs4 import BeautifulSoup
@@ -31,12 +34,17 @@ class ResumeState(TypedDict):
     master_resume: str   # the background, loaded once, the second node after starting
     tailored_resume: str # LLM generated text before PDF render
     output_path: str | None
+    job_posting: dict | None
+    want_cover_letter: bool
+    cover_letter: str | None
+    cover_letter_path: str | None
 
 
 class FitReasoning(BaseModel):
     is_suitable: bool =Field(..., description= 'Classify whether the master_resume is suitable with the job content'
     'by comparing the required qualifications and actual experience () and checking graduation dates on both the job description and the resume'
     '.')
+    fit_reasoning: str = Field(..., description="2-3 sentences on why, citing specific gaps or matches, also classify the gaps as major or minor")
 
 
 class JobPosting(BaseModel):
