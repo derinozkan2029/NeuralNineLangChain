@@ -50,6 +50,15 @@ class JobPosting(BaseModel):
     work_authorization_quote: str | None = Field(None, description="Verbatim sentence about visa sponsorship or work authorization, or null if none")
     sponsorship_restricted: bool = Field(..., description="True if that quote says sponsorship (e.g. H-1B) is unavailable or limited")
 
+
+def extract_job_posting(state: ResumeState):
+    structured_llm = llm.with_structured_output(JobPosting)
+    result = structured_llm.invoke([
+        {'role': 'system', 'content': 'Extract only what the posting explicitly states. Use null or empty when absent and never guess. Quote the work-authorization line as it is exactly.'},
+        {'role': 'user', 'content': state['job_description']},
+    ])
+    return {'job_posting': result.model_dump()}
+
 def assess_fit(state:ResumeState): #takes a state and does an LLMP prompt with a structured output
     structured_llm = llm.with_structured_output(FitReasoning)
 
@@ -178,10 +187,12 @@ graph_builder.add_node('fetch_job_posting', fetch_job_posting)
 graph_builder.add_node('tailor_resume', curate_tailored_resume)
 graph_builder.add_node('render_pdf', render_pdf)
 graph_builder.add_node('report_not_suitable', report_not_suitable)
+graph_builder.add_node('extract_job_posting', extract_job_posting)
 
 
 graph_builder.add_edge(START, 'fetch_job_posting')
-graph_builder.add_edge('fetch_job_posting', 'assess_fit')
+graph_builder.add_edge('fetch_job_posting', 'extract_job_posting') #now this is updated
+graph_builder.add_edge('extract_job_posting', 'assess_fit')          
 graph_builder.add_conditional_edges('assess_fit', lambda state: 'suitable' if state['is_suitable'] else 'not_suitable', {'suitable': 'tailor_resume', 'not_suitable': 'report_not_suitable'})
 # if not suitable we don't need to run it or tailor the resume
 graph_builder.add_edge('report_not_suitable', END)
