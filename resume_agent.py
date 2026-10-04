@@ -37,7 +37,18 @@ class FitReasoning(BaseModel):
     is_suitable: bool =Field(..., description= 'Classify whether the master_resume is suitable with the job content'
     'by comparing the required qualifications and actual experience () and checking graduation dates on both the job description and the resume'
     '.')
-    fit_reasoning: str = Field(..., description="2-3 sentences on why, citing specific gaps or matches, also classify the gaps as major or minor")
+
+
+class JobPosting(BaseModel):
+    company: str = Field(..., description="Hiring company name")
+    title: str = Field(..., description="Job title as written")
+    required_skills: list[str] = Field(..., description="Short phrases (max 10), minimum/required qualifications only")
+    preferred_skills: list[str] = Field(..., description="Short phrases (max 10), preferred/nice-to-have only")
+    start_date: str | None = Field(None, description="Start date as written, or null")
+    end_date: str | None = Field(None, description="End date as written, or null")
+    availability_requested: bool = Field(..., description="True only if the posting tells candidates to state availability or dates on their resume")
+    work_authorization_quote: str | None = Field(None, description="Verbatim sentence about visa sponsorship or work authorization, or null if none")
+    sponsorship_restricted: bool = Field(..., description="True if that quote says sponsorship (e.g. H-1B) is unavailable or limited")
 
 def assess_fit(state:ResumeState): #takes a state and does an LLMP prompt with a structured output
     structured_llm = llm.with_structured_output(FitReasoning)
@@ -69,7 +80,28 @@ def curate_tailored_resume(state: ResumeState):
             'summary to fit the job. Mirror the job posting\'s terminology where honestly applicable '
             '(e.g. if the posting says "distributed systems" and the resume has genuinely relevant work, '
             'use that phrasing). Follow the same markdown section headers as the master resume, in the '
-            'same order, mirrored exactly. Keep total content to what fits one page.')},
+            'same order, mirrored exactly, but you may omit an entire section or entry if it is not '
+            'relevant to this job (e.g. drop a pre-college/research section for a role that is not '
+            'research-focused) rather than only trimming bullets within it. Content must fit strictly '
+            'one printed page at ~9.6pt font with 0.45in top/bottom and 0.6in side margins '
+            '(roughly 52-56 lines total including headers) -- if a full draft would run longer, cut whole '
+            'low-relevance sections/entries first before shortening the sections most relevant to this job. '
+            'Preserve every markdown link (e.g. project repo/demo URLs) exactly as written in the master '
+            'resume for any entry you keep -- never drop a link from a kept entry to save space. '
+            'Omit the "Research (Pre-College)" section entirely unless the job posting is specifically '
+            'research-focused (e.g. a research assistantship, PhD-track, or "Student Researcher" role) '
+            '-- for general software/technical/business roles it does not differentiate the candidate '
+            'and should be cut first when trimming for length. '
+            'Format the Certifications section as a single compact line (items separated by " · "), '
+            'matching the master resume\'s formatting exactly -- never expand it into a bulleted list, '
+            'since that costs several lines for low-differentiation content. For technical/engineering '
+            'roles, the project(s) whose technical work most closely matches the posting (e.g. AI/LLM '
+            'integration, data pipelines, custom tooling with measured results) should keep 3-4 concrete '
+            'technical bullets, not be trimmed to a single generic line -- if space is tight, cut bullets '
+            'from a less-relevant entry (e.g. a club/team activity with only high-level, non-technical '
+            'detail) before compressing the most technically relevant project down to one bullet. '
+            'Never use em dashes (—) -- they read as an AI-writing tell. Use a period, comma, colon, '
+            'or semicolon instead, restructuring the sentence if needed.')},
         {'role': 'user', 'content': (  f"MASTER RESUME:\n{state['master_resume']}\n\n" f"JOB DESCRIPTION:\n{state['job_description']}"
         )}, ]
     response = llm.invoke(messages)
@@ -158,19 +190,20 @@ graph_builder.add_edge('render_pdf', END)
 
 graph = graph_builder.compile()
 
-resume_path = input('Enter path to your resume file (.md or .txt) [default: workspace/resume_master.md]: ').strip()
-if not resume_path:
-    resume_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'resume_master.md')
-master_resume = load_master_resume(resume_path)
+if __name__ == '__main__':
+    resume_path = input('Enter path to your resume file (.md or .txt) [default: workspace/resume_master.md]: ').strip()
+    if not resume_path:
+        resume_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'resume_master.md')
+    master_resume = load_master_resume(resume_path)
 
-job_url = input('Enter job posting URL: ')
+    job_url = input('Enter job posting URL: ')
 
-initial_state = {
-    'job_url': job_url, 'job_description': '', 'is_suitable': None, 'fit_reasoning': None,
-    'master_resume': master_resume, 'tailored_resume': '', 'output_path': None,
-}
-result = graph.invoke(initial_state) #no thread_id this time bc I didn't have a checkpointer
-if result.get('output_path'):
-    print(f"Resume written to {result['output_path']}")
-else:
-    print(f"Not a good fit: {result['fit_reasoning']}")
+    initial_state = {
+        'job_url': job_url, 'job_description': '', 'is_suitable': None, 'fit_reasoning': None,
+        'master_resume': master_resume, 'tailored_resume': '', 'output_path': None,
+    }
+    result = graph.invoke(initial_state) #no thread_id this time bc I didn't have a checkpointer
+    if result.get('output_path'):
+        print(f"Resume written to {result['output_path']}")
+    else:
+        print(f"Not a good fit: {result['fit_reasoning']}")
