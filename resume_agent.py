@@ -296,8 +296,61 @@ def count_pdf_pages(pdf_path: str) -> int:
     with open(pdf_path, 'rb') as f:
         data = f.read()
     match = re.search(rb'/Type\s*/Pages.*?/Count\s+(\d+)', data, re.DOTALL)
-    
+
     return int(match.group(1)) if match else 0
+
+
+def render_cover_letter(state: ResumeState):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    company = (state.get('job_posting') or {}).get('company') or ''
+    slug = re.sub(r'[^a-z0-9]+', '_', company.lower()).strip('_') or 'company'
+
+    header_lines = [line.strip() for line in state['tailored_resume'].splitlines() if  line.strip()]
+    name_line = header_lines[0].lstrip('#').strip()
+    contact_html = markdown.markdown(header_lines[1]) if len(header_lines) > 1 else ''
+    match = re.match(r'(.*?)\s*\((.*?)\)$', name_line)
+    name, pronouns = (match.group(1), match.group(2)) if match else (name_line, '')
+    pronouns_html = f' <span class="pronouns">({escape(pronouns)})</span>' if pronouns else ''
+    today = date.today()
+    greeting = f'Dear {company} Hiring Team,' if company else 'Dear Hiring Team,'
+
+    body_html = ''.join(f'<p>{escape(p)}</p>' for p in state['cover_letter'].split('\n\n'))
+
+    full_html = f"""<html>
+<head>
+<meta charset="utf-8">
+<style>
+{COVER_LETTER_CSS}
+</style>
+</head>
+<body>
+<h1>{escape(name)}{pronouns_html}</h1>
+<div class="contact">{contact_html}</div>
+<div class="date">{today:%B} {today.day}, {today.year}</div>
+<p>{escape(greeting)}</p>
+{body_html}
+<p>Sincerely,<br>{escape(name)}</p>
+</body>
+</html>"""
+
+    html_path = os.path.join(base_dir, 'workspace', 'tmp', f'cover_letter_{slug}.html')
+
+    pdf_path = os.path.join(base_dir, 'workspace', 'output', f'cover_letter_{slug}.pdf')
+    os.makedirs(os.path.dirname(html_path), exist_ok= True)
+    os.makedirs(os.path.dirname(pdf_path), exist_ok= True)
+
+    with open(html_path, 'w', encoding='utf-8') as f:
+        f.write(full_html)
+    print_pdf(html_path, pdf_path)
+
+    with open(pdf_path.replace('.pdf', '.txt'), 'w', encoding='utf-8') as f:
+        f.write(f"{greeting}\n\n{state['cover_letter']}\n\nSincerely,\n{name}\n")
+
+    pages = count_pdf_pages(pdf_path)
+    if pages!=1:
+        print(f'Warning: the cover letter came out {pages} pages; it should be exactly 1.')
+
+    return {'cover_letter_path': pdf_path}
 
 
 
