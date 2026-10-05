@@ -364,6 +364,8 @@ graph_builder.add_node('tailor_resume', curate_tailored_resume)
 graph_builder.add_node('render_pdf', render_pdf)
 graph_builder.add_node('report_not_suitable', report_not_suitable)
 graph_builder.add_node('extract_job_posting', extract_job_posting)
+graph_builder.add_node('write_cover_letter', write_cover_letter)
+graph_builder.add_node('render_cover_letter', render_cover_letter)
 
 
 graph_builder.add_edge(START, 'fetch_job_posting')
@@ -373,6 +375,9 @@ graph_builder.add_conditional_edges('assess_fit', lambda state: 'suitable' if st
 # if not suitable we don't need to run it or tailor the resume
 graph_builder.add_edge('report_not_suitable', END)
 graph_builder.add_edge('tailor_resume', 'render_pdf')
+graph_builder.add_conditional_edges('render_pdf', lambda state: 'letter' if state.get('want_cover_letter') else 'done', {'letter': 'write_cover_letter', 'done': END})
+graph_builder.add_edge('write_cover_letter', 'render_cover_letter')
+graph_builder.add_edge('render_cover_letter', END)
 graph_builder.add_edge('render_pdf', END)
 
 graph = graph_builder.compile()
