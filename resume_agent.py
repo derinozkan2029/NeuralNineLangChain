@@ -40,6 +40,31 @@ class ResumeState(TypedDict):
     cover_letter_path: str | None
 
 
+class CoverLetterDraft(BaseModel):
+    paragraphs: list[str] = Field(..., description="3 or 4 body paragraphs of plain text, with no greeting and no sign-off, 230 to 320 words in total")
+
+
+COVER_LETTER_RULES = (
+    "You write a one-page cover letter for the candidate in the master resume. "
+    "Only use facts that are in the master resume. Never invent employers, titles, metrics, dates, or skills. "
+    "Describe unfinished work as unfinished, and never state results the master resume does not state. "
+    "Keep credit exactly as the master resume gives it (for example 'wrote under the supervision of', not 'co-authored'). "
+    "If the job asks for something the resume does not show, do not claim it; leave it out. "
+    "The first sentence must be concrete: a specific thing the candidate built or decided, or a specific part of this role. "
+    "Never open with 'I am writing to apply' or 'I am excited' or 'I am thrilled'. "
+    "Never use the words passionate, thrilled, cutting-edge, groundbreaking, or leverage. "
+    "Do not walk through the resume line by line. Pick one or two experiences and tell the short story behind them: "
+    "the problem, what the candidate decided, and what happened. "
+    "Tie those stories to two or three specifics from the posting, using the posting's own terms only where they are honestly true. "
+    "Use short, plain sentences in the first person. Never use em dashes. "
+    "End with one specific forward-looking sentence and a brief, sincere thank-you. "
+    "Write 3 or 4 paragraphs and 230 to 320 words in total so the letter fits on one page. "
+    "Return only the body paragraphs: no greeting, no sign-off, no headings."
+)
+
+BANNED_WORDS = ('passionate', 'thrilled', 'cutting-edge', 'groundbreaking', 'leverag')  # 'leverag' also catches leverage, leveraged, leveraging
+
+
 class FitReasoning(BaseModel):
     is_suitable: bool =Field(..., description= 'Classify whether the master_resume is suitable with the job content'
     'by comparing the required qualifications and actual experience () and checking graduation dates on both the job description and the resume'
@@ -186,6 +211,38 @@ def render_pdf(state: ResumeState):
     #launches Chrome as a separate program  in headless mode , tells it to load the HTML file we just wrote (file://{html_path}) and print it straight to a PDF at output_path, then exits.
 
     return {'output_path': output_path}
+
+class CoverLetterDraft(BaseModel):
+    paragraphs: list[str] = Field(..., description="3 or 4 body paragraphs of plain text, with no greeting and no sign-off, 230 to 320 words in total")
+
+
+COVER_LETTER_RULES = (
+    "You write a one-page cover letter for the candidate in the master resume. " "Only use facts that are in the master resume. Never invent employers, titles, metrics, dates, or skills. "
+    "Describe unfinished work as unfinished, and never state results the master resume does not state. " "Keep credit exactly as the master resume gives it (for example 'wrote under the supervision of', not 'co-authored'). "
+    "If the job asks for something the resume does not show, do not claim it; leave it out. "
+    "The first sentence must be concrete like a specific thing the candidate built or decided, or a specific part of this role. "
+    "Never open with 'I am writing to apply' or 'I am excited' or 'I am thrilled'. " "Never use the words passionate, thrilled, cutting-edge, groundbreaking, or leverage. "
+    "Do not walk through the resume line by line. Pick one or two experiences and tell the short story behind them:the problem, what the candidate decided, and what happened. "
+    "Tie those stories to two or three specifics from the posting, using the posting's own terms only where they are honestly true. "
+    "Use short, plain sentences in the first person. Never use em dashes. " "End with one specific forward-looking sentence and a brief, sincere thank-you. "
+    "Write 3 or 4 paragraphs and 230 to 320 words in total so the letter fits on one page. ""Return only the body paragraphs: no greeting, no sign-off, no headings."
+)
+
+BANNED_WORDS = ('passionate', 'thrilled', 'cutting-edge', 'groundbreaking', 'leverage', 'leveraged', 'leveraging')  
+
+COVER_LETTER_CSS = """
+@page { size: Letter; margin: 0.8in 1in; }
+* { box-sizing: border-box; }
+body { font-family: "Times New Roman", Times, serif; font-size: 11.3pt; line-height: 1.45; color: #1a1a1a; margin: 0; }
+h1 { font-size: 16pt; font-weight: 700; margin: 0 0 2px 0; }
+h1 .pronouns { font-size: 10.5pt; font-weight: 400; color: #555; }
+.contact { font-size: 9.8pt; color: #444; margin-bottom: 20px; }
+.contact p { margin: 0; }
+.contact a { color: #444; text-decoration: none; }
+.date { margin-bottom: 18px; }
+p { margin: 0 0 14px 0; }
+"""
+
 
 
 
