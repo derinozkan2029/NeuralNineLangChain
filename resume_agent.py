@@ -243,6 +243,24 @@ h1 .pronouns { font-size: 10.5pt; font-weight: 400; color: #555; }
 p { margin: 0 0 14px 0; }
 """
 
+def check_cover_letter(paragraphs: list[str]) -> list[str]:
+    """Return the rules the letter breaks. An empty list means it passes."""
+    text = ' '.join(paragraphs)
+    problems = []
+    if '—' in text:
+        problems.append('The letter uses an em dash. So use a period, comma, colon, or semicolon instead.')
+    word_count = len(text.split())
+    if not 230 <= word_count <= 320:
+        problems.append(f'The letter is {word_count} words. It must be 230 to 320 words.')
+    if not 3 <= len(paragraphs) <= 4:
+        problems.append(f'The letter has {len(paragraphs)} paragraphs. It must have 3 or 4.')
+    if paragraphs and re.match(r"\s*I(?: am|['’]m) (?:writing|excited|thrilled)", paragraphs[0], re.IGNORECASE):
+        problems.append('The letter opens with a stock phrase. Open with something concrete instead.')
+    used = [word for word in BANNED_WORDS if word in text.lower()]
+    if used:
+        problems.append('The letter uses banned words: ' + ', '.join(used) + '.')
+    return problems
+
 
 
 
