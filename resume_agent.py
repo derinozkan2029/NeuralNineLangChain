@@ -257,9 +257,36 @@ def check_cover_letter(paragraphs: list[str]) -> list[str]:
     if paragraphs and re.match(r"\s*I(?: am|['’]m) (?:writing|excited|thrilled)", paragraphs[0], re.IGNORECASE):
         problems.append('The letter opens with a stock phrase. Open with something concrete instead.')
     used = [word for word in BANNED_WORDS if word in text.lower()]
+
     if used:
         problems.append('The letter uses banned words: ' + ', '.join(used) + '.')
     return problems
+
+def write_cover_letter(state: ResumeState):
+    posting = state.get('job_posting') or {}
+    details = {key: posting.get(key) for key in ('company', 'title', 'required_skills', 'preferred_skills')}
+    structured_llm = llm.with_structured_output(CoverLetterDraft)
+    messages = [ {'role': 'system', 'content': COVER_LETTER_RULES},  {'role': 'user', 'content': (
+            f"MASTER RESUME (this is the only source of facts):\n{state['master_resume']}\n\n"
+            f"TAILORED RESUME (what is being emphasized for this job):\n{state['tailored_resume']}\n\n"
+            f"JOB DESCRIPTION:\n{state['job_description']}\n\n" f"JOB DETAILS:\n{json.dumps(details)}\n\n"
+            f"FIT NOTES (do not paper over the gaps listed here):\n{state.get('fit_reasoning') or ''}"
+        )},
+    ]
+    paragraphs, problems = [], []
+    for attempt in range(3):
+        draft = structured_llm.invoke(messages)
+        paragraphs= [p.strip() for p in draft.paragraphs if p.strip()]
+        problems = check_cover_letter(paragraphs)
+        if not problems:
+            break
+        messages = messages + [ {'role': 'assistant', 'content': '\n\n'.join(paragraphs)}, {'role': 'user', 'content': 'Rewrite the letter and fix these problems:\n- ' + '\n- '.join(problems)},
+        ]
+    if problems:
+        print('Cover letter still breaks these rules after 3 attempts:\n- ' + '\n- '.join(problems))
+
+    return {'cover_letter': '\n\n'.join(paragraphs)}
+
 
 
 
