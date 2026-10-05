@@ -276,7 +276,7 @@ def write_cover_letter(state: ResumeState):
     paragraphs, problems = [], []
     for attempt in range(3):
         draft = structured_llm.invoke(messages)
-        paragraphs= [p.strip() for p in draft.paragraphs if p.strip()]
+        paragraphsw= [p.strip() for p in draft.paragraphs if p.strip()]
         problems = check_cover_letter(paragraphs)
         if not problems:
             break
@@ -286,6 +286,12 @@ def write_cover_letter(state: ResumeState):
         print('Cover letter still breaks these rules after 3 attempts:\n- ' + '\n- '.join(problems))
 
     return {'cover_letter': '\n\n'.join(paragraphs)}
+
+def print_pdf(html_path: str, pdf_path: str):
+    chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    subprocess.run([ chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf_path}", f"file://{html_path}"
+    ], check=True)
+
 
 
 
