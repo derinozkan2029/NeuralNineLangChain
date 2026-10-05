@@ -390,12 +390,17 @@ if __name__ == '__main__':
 
     job_url = input('Enter job posting URL: ')
 
-    initial_state = {
-        'job_url': job_url, 'job_description': '', 'is_suitable': None, 'fit_reasoning': None,
-        'master_resume': master_resume, 'tailored_resume': '', 'output_path': None,
+    want_letter = input('Also write a cover letter? [y/N]: ').strip().lower().startswith('y')
+
+    initial_state = { 'job_url': job_url, 'job_description': '', 'is_suitable': None, 'fit_reasoning': None,
+        'master_resume': master_resume, 'tailored_resume': '', 'output_path': None, 'job_posting': None, 'want_cover_letter': want_letter, 
+        'cover_letter': None, 'cover_letter_path': None,
     }
-    result = graph.invoke(initial_state) #no thread_id this time bc I didn't have a checkpointer
+    result = graph.invoke(initial_state)
+
     if result.get('output_path'):
         print(f"Resume written to {result['output_path']}")
+        if result.get('cover_letter_path'):
+            print(f"Cover letter written to {result['cover_letter_path']}")
     else:
         print(f"Not a good fit: {result['fit_reasoning']}")
