@@ -1,7 +1,7 @@
 [project]
-name = "resume-curator-agent"
+name = "neuralninelangchain"
 version = "0.1.0"
-description = "LangGraph agent that scores job fit, then tailors a one-page resume and cover letter."
+description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
